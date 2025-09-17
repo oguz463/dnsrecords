@@ -1,0 +1,209 @@
+{#
+* Author: Oğuz Tokatlı
+#}
+{% extends 'base.html.twig' %}
+
+{% block title %}DNS Records Lookup{% endblock %}
+
+{% block stylesheets %}
+<style>
+    /* General container and layout */
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .title {
+        text-align: center;
+        font-size: 2rem;
+        margin-bottom: 30px;
+        color: #333;
+    }
+
+    /* Card style */
+    .card {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+    }
+
+    .card-body {
+        padding: 20px;
+    }
+
+    /* Form styles */
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    label {
+        font-size: 1rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 4px rgba(0, 123, 255, 0.5);
+    }
+
+    /* Button style */
+    button.btn-primary {
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        font-size: 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    button.btn-primary:hover {
+        background-color: #0056b3;
+    }
+
+    /* Table styles */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    th {
+        background-color: #f4f4f4;
+        font-weight: bold;
+    }
+
+    tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+
+    /* Error message styling */
+    .text-danger {
+        color: red;
+    }
+
+    /* Margin-top for results */
+    .mt-4 {
+        margin-top: 30px;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <h1 class="title">DNS Records Lookup</h1>
+
+        <div class="card">
+            <div class="card-body">
+                <form id="dnsForm" class="form">
+                    <div class="form-group">
+                        <label for="domain">Enter Domain:</label>
+                        <input type="text" id="domain" name="domain" class="form-control" placeholder="example.com">
+                    </div>
+                    <button type="submit" class="btn-primary">Lookup</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="results" class="mt-4"></div>
+    </div>
+
+    <script>
+        document.getElementById('dnsForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const domain = document.getElementById('domain').value.trim();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = ''; // Clear previous
+
+            if (!domain) {
+                resultsDiv.innerHTML = '<p class="text-danger">Please enter a domain name.</p>';
+                return;
+            }
+
+            fetch(`/api/dns-records?domain=${encodeURIComponent(domain)}`)
+                .then(async response => {
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (err) {
+                        throw new Error('Invalid JSON response from server.');
+                    }
+
+                    if (!response.ok) {
+                        // Server returned 4xx or 5xx with a JSON error
+                        throw new Error(data.error || `Server error (${response.status})`);
+                    }
+
+                    if (!data.success) {
+                        resultsDiv.innerHTML = `<p class="text-danger">${data.error}</p>`;
+                        return;
+                    }
+
+                    const records = data.records || [];
+
+                    if (!Array.isArray(records) || records.length === 0) {
+                        resultsDiv.innerHTML = '<p>No DNS records found.</p>';
+                        return;
+                    }
+
+                    // Create table
+                    const table = document.createElement('table');
+                    table.classList.add('table', 'mt-4');
+
+                    const thead = document.createElement('thead');
+                    thead.innerHTML = `
+                    <tr>
+                        <th>Type</th>
+                        <th>Name</th>
+                        <th>Value</th>
+                        <th>TTL</th>
+                    </tr>`;
+                    table.appendChild(thead);
+
+                    const tbody = document.createElement('tbody');
+                    records.forEach(record => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                        <td>${record.type}</td>
+                        <td>${record.name}</td>
+                        <td>${record.value}</td>
+                        <td>${record.ttl}</td>`;
+                        tbody.appendChild(row);
+                    });
+
+                    table.appendChild(tbody);
+                    resultsDiv.appendChild(table);
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    resultsDiv.innerHTML = `<p class="text-danger">${error.message}</p>`;
+                });
+        });
+    </script>
+{% endblock %}
